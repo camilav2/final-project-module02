@@ -9,6 +9,18 @@ const mongoose     = require('mongoose');
 const logger       = require('morgan');
 const path         = require('path');
 
+const bcrypt = require('bcrypt');
+
+const passport = require('passport');
+const LocalStrategy = require('passport-local').Strategy;
+
+const User = require('./models/user');
+// const Journal = require('./models/journal');
+// const Day = require('./models/day');
+// const Place = require('./models/place');
+// const Comment = require('./models/comment');
+
+const session = require('express-session');
 
 mongoose
   .connect('mongodb://localhost/final-project', {useNewUrlParser: true})
@@ -30,6 +42,52 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
 
+app.use(session({
+  secret: "final-project",
+  resave: true,
+  saveUninitialized: true,
+}));
+
+
+//Passport
+
+passport.serializeUser((user, cb) => {
+  if(!user._id) {
+    return cb("id not present");
+  }
+  cb(null, user._id);
+});
+
+passport.deserializeUser((id, cb) => {
+  User.findById(id, (err, user) => {
+    if (err) { return cb(err); }
+    cb(null, user);
+    console.log(user);
+  });
+});
+
+passport.use(new LocalStrategy((username, password, next) => {
+  User.findOne({ username }, (err, user) => {
+    if (err) {
+      console.log(err);
+      return next(err);
+    }
+    if (!user) {
+      return next(null, false, { message: "Incorrect username" });
+    }
+    if (!bcrypt.compareSync(password, user.password)) {
+      console.log(err);
+      return next(null, false, { message: "Incorrect password" });
+    }
+
+    return next(null, user);
+  });
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+
 // Express View engine setup
 
 app.use(require('node-sass-middleware')({
@@ -50,9 +108,13 @@ app.use(favicon(path.join(__dirname, 'public', 'images', 'favicon.ico')));
 app.locals.title = 'Express - Generated with IronGenerator';
 
 
+// Routes middleware goes here
 
 const index = require('./routes/index');
 app.use('/', index);
+
+const auth = require('./routes/auth');
+app.use('/', auth);
 
 
 module.exports = app;
